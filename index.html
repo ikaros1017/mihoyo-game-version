@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <title>米家版本观测台</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+      * {
+        box-sizing: border-box;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      /* 基础样式 */
+      body {
+        margin: 0;
+        font-family: 'Helvetica Neue', Arial, sans-serif;
+        background-color: #0c0f1a;
+        color: #ffffff;
+        overflow-x: hidden;
+      }
+
+      /* 动态背景容器 */
+      .app-container {
+        min-height: 100vh;
+        padding: 20px;
+        transition: background 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      /* --- 主题配置 --- */
+      /* 原神状态 */
+      .theme-gi {
+        background: radial-gradient(circle at 50% 0%, #2a2e45 0%, #0c0f1a 100%);
+        --theme-color: #d3bc8e;
+        --theme-shadow: rgba(211, 188, 142, 0.4);
+      }
+      /* 崩铁状态 */
+      .theme-hsr {
+        background: radial-gradient(circle at 50% 0%, #1a2333 0%, #0c0f1a 100%);
+        --theme-color: #61e1ff;
+        --theme-shadow: rgba(97, 225, 255, 0.4);
+      }
+
+      /* --- 导航按钮 --- */
+      .nav-tabs {
+        display: flex;
+        background: rgba(0, 0, 0, 0.5);
+        padding: 5px;
+        border-radius: 50px;
+        margin: 20px 0 40px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        z-index: 10;
+      }
+
+      .tab-item {
+        padding: 12px 30px;
+        border-radius: 40px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: bold;
+        transition: all 0.3s ease;
+        color: rgba(255, 255, 255, 0.4);
+      }
+
+      /* 选中状态：利用 CSS 变量统一控制 */
+      .tab-item.active {
+        background-color: var(--theme-color);
+        color: #0c0f1a;
+        box-shadow: 0 0 15px var(--theme-shadow);
+      }
+
+      /* --- 内容区域 --- */
+      .header {
+        text-align: center;
+        margin-bottom: 40px;
+      }
+      .header h1 {
+        font-size: clamp(1.8rem, 5vw, 2.5rem);
+        color: var(--theme-color);
+        transition: color 0.5s;
+        margin: 0;
+      }
+
+      .version-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 25px;
+        width: 100%;
+        max-width: 1100px;
+      }
+
+      .card {
+        background: rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(15px);
+        -webkit-backdrop-filter: blur(15px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 24px;
+        padding: 30px;
+        transition: all 0.4s;
+        position: relative;
+      }
+
+      /* 高亮当前版本的卡片 */
+      .card.active-version {
+        border-color: var(--theme-color);
+        box-shadow:
+          inset 0 0 20px rgba(255, 255, 255, 0.02),
+          0 10px 30px rgba(0, 0, 0, 0.3);
+      }
+
+      .v-num {
+        font-size: 2.8rem;
+        font-weight: 900;
+        color: var(--theme-color);
+        display: block;
+        margin-bottom: 20px;
+      }
+
+      .data-row {
+        display: flex;
+        justify-content: space-between;
+        background: rgba(0, 0, 0, 0.2);
+        padding: 15px;
+        border-radius: 15px;
+        margin-bottom: 12px;
+        font-size: 0.95rem;
+      }
+
+      .data-label {
+        opacity: 0.5;
+      }
+
+      .footer-info {
+        margin-top: 20px;
+        text-align: center;
+        padding: 12px;
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 12px;
+        color: var(--theme-color);
+        font-weight: bold;
+        font-size: 0.9rem;
+      }
+
+      .passed {
+        text-decoration: line-through;
+        opacity: 0.3;
+      }
+
+      /* 移动端适配 */
+      @media (max-width: 768px) {
+        .nav-tabs {
+          width: 100%;
+        }
+        .tab-item {
+          flex: 1;
+          text-align: center;
+          padding: 12px 5px;
+          font-size: 13px;
+        }
+        .version-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <div :class="['app-container', 'theme-' + currentGame]">
+        <nav class="nav-tabs">
+          <div
+            class="tab-item"
+            :class="{ active: currentGame === 'gi' }"
+            @click="currentGame = 'gi'"
+          >
+            原神观测
+          </div>
+          <div
+            class="tab-item"
+            :class="{ active: currentGame === 'hsr' }"
+            @click="currentGame = 'hsr'"
+          >
+            崩铁观测
+          </div>
+        </nav>
+
+        <header class="header">
+          <h1>{{ config.title }}</h1>
+          <p style="opacity: 0.5; font-size: 12px; margin-top: 10px">
+            数据实时计算中: {{ nowStr }}
+          </p>
+        </header>
+
+        <div class="version-grid">
+          <div
+            v-for="(v, index) in versions"
+            :key="v.num"
+            class="card"
+            :class="{ 'active-version': index === 0 }"
+          >
+            <span class="v-num">{{ v.num }}</span>
+
+            <div class="data-row">
+              <span class="data-label">📺 前瞻直播预测</span>
+              <span :class="{ passed: v.liveDate < now }"
+                >{{ formatDate(v.liveDate) }}</span
+              >
+            </div>
+
+            <div class="data-row">
+              <span class="data-label">🚀 版本更新时间</span>
+              <span>{{ formatDate(v.upDate) }}</span>
+            </div>
+
+            <div class="footer-info">
+              <span v-if="getDiff(v.upDate) > 0"
+                >⏳ 约 {{ getDiff(v.upDate) }} 天后更新</span
+              >
+              <span v-else-if="getDiff(v.upDate) === 0">🔥 今日维护开启</span>
+              <span v-else>🌟 版本运行中</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const { createApp, ref, computed, onMounted } = Vue;
+
+      createApp({
+        setup() {
+          const currentGame = ref('gi');
+          const now = ref(new Date());
+
+          const CONFIGS = {
+            gi: {
+              title: '提瓦特星辰排期',
+              baseVer: [6, 5],
+              baseDate: '2026-04-08',
+              cycle: 42,
+              maxMinor: 8,
+              exceptions: [],
+            },
+            hsr: {
+              title: '琥珀历版本观测',
+              baseVer: [3, 1],
+              baseDate: '2026-04-01',
+              cycle: 42,
+              maxMinor: 6,
+              // 此处可填入特殊时长修正
+              exceptions: [{ ver: '3.1', days: 21 }],
+            },
+          };
+
+          const config = computed(() => CONFIGS[currentGame.value]);
+
+          const versions = computed(() => {
+            const res = [];
+            let cMajor = config.value.baseVer[0];
+            let cMinor = config.value.baseVer[1];
+            let cDate = new Date(config.value.baseDate);
+
+            // 预算 6 个版本，保证滑动顺畅
+            for (let i = 0; i < 6; i++) {
+              const verStr = `V${cMajor}.${cMinor}`;
+              const liveDate = new Date(cDate);
+              liveDate.setDate(cDate.getDate() - 12);
+
+              res.push({
+                num: verStr,
+                upDate: new Date(cDate),
+                liveDate: liveDate,
+              });
+
+              // 检查特殊周期
+              const exc = config.value.exceptions.find(
+                (e) => e.ver === `${cMajor}.${cMinor}`,
+              );
+              cDate.setDate(
+                cDate.getDate() + (exc ? exc.days : config.value.cycle),
+              );
+
+              // 进位逻辑
+              if (cMinor >= config.value.maxMinor) {
+                cMajor++;
+                cMinor = 0;
+              } else {
+                cMinor++;
+              }
+            }
+
+            // 定位当前应该显示的起始版本
+            const activeIdx = res.findIndex((r) => {
+              const patchEnd = new Date(r.upDate);
+              patchEnd.setDate(patchEnd.getDate() + 41);
+              return patchEnd > now.value;
+            });
+            return res.slice(
+              activeIdx >= 0 ? activeIdx : 0,
+              (activeIdx >= 0 ? activeIdx : 0) + 3,
+            );
+          });
+
+          const formatDate = (d) =>
+            d.toLocaleDateString('zh-CN', {
+              month: '2-digit',
+              day: '2-digit',
+            }) +
+            ' (' +
+            ['日', '一', '二', '三', '四', '五', '六'][d.getDay()] +
+            ')';
+          const getDiff = (d) => Math.ceil((d - now.value) / 86400000);
+
+          onMounted(() => {
+            setInterval(() => (now.value = new Date()), 60000);
+          });
+
+          return {
+            currentGame,
+            config,
+            versions,
+            now,
+            nowStr: computed(() => now.value.toLocaleString()),
+            formatDate,
+            getDiff,
+          };
+        },
+      }).mount('#app');
+    </script>
+  </body>
+</html>
