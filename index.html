@@ -244,70 +244,93 @@
           const CONFIGS = {
             gi: {
               title: '提瓦特星辰排期',
-              baseVer: [6, 5],
-              baseDate: '2026-04-08',
               cycle: 42,
               maxMinor: 8,
-              exceptions: [],
+              // 已发布版本记录（按时间升序，新版本上线后在此追加即可）
+              // days 字段可选，表示该版本的持续天数，不填则使用 cycle
+              history: [
+                { ver: '6.4', date: '2026-02-25' },
+                { ver: '6.5', date: '2026-04-08' },
+              ],
             },
             hsr: {
               title: '琥珀历版本观测',
-              baseVer: [3, 1],
-              baseDate: '2026-04-01',
               cycle: 42,
               maxMinor: 6,
-              // 此处可填入特殊时长修正
-              exceptions: [{ ver: '3.1', days: 21 }],
+              history: [
+                { ver: '3.0', date: '2026-02-26' },
+                { ver: '3.1', date: '2026-04-01', days: 21 },
+                { ver: '3.2', date: '2026-04-22' },
+              ],
             },
           };
 
           const config = computed(() => CONFIGS[currentGame.value]);
 
+          /** 辅助：版本号进位 */
+          function nextVer(major, minor, maxMinor) {
+            if (minor >= maxMinor) return [major + 1, 0];
+            return [major, minor + 1];
+          }
+
+          /** 辅助：从 Date 对象生成 YYYY-MM-DD 字符串（本地时区） */
+          function toLocalISO(d) {
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${y}-${m}-${day}`;
+          }
+
           const versions = computed(() => {
-            const res = [];
-            let cMajor = config.value.baseVer[0];
-            let cMinor = config.value.baseVer[1];
-            let cDate = new Date(config.value.baseDate);
+            const cfg = config.value;
+            const history = cfg.history;
+            if (!history.length) return [];
 
-            // 预算 6 个版本，保证滑动顺畅
-            for (let i = 0; i < 6; i++) {
-              const verStr = `V${cMajor}.${cMinor}`;
-              const liveDate = new Date(cDate);
-              liveDate.setDate(cDate.getDate() - 12);
-
-              res.push({
-                num: verStr,
-                upDate: new Date(cDate),
-                liveDate: liveDate,
-              });
-
-              // 检查特殊周期
-              const exc = config.value.exceptions.find(
-                (e) => e.ver === `${cMajor}.${cMinor}`,
-              );
-              cDate.setDate(
-                cDate.getDate() + (exc ? exc.days : config.value.cycle),
-              );
-
-              // 进位逻辑
-              if (cMinor >= config.value.maxMinor) {
-                cMajor++;
-                cMinor = 0;
-              } else {
-                cMinor++;
+            // 1. 找到当前版本：history 中 date <= now 的最后一条
+            let curIdx = 0;
+            for (let i = history.length - 1; i >= 0; i--) {
+              if (new Date(history[i].date) <= now.value) {
+                curIdx = i;
+                break;
               }
             }
 
-            // 定位当前应该显示的起始版本
-            const activeIdx = res.findIndex((r) => {
-              const patchEnd = new Date(r.upDate);
-              patchEnd.setDate(patchEnd.getDate() + 41);
-              return patchEnd > now.value;
-            });
-            return res.slice(
-              activeIdx >= 0 ? activeIdx : 0,
-              (activeIdx >= 0 ? activeIdx : 0) + 3,
-            );
+            // 2. 构建完整版本列表：history 中已有的 + 预测的
+            const all = history.map((h) => ({ ...h, predicted: false }));
+
+            // 从最后一条记录开始向前预测
+            const last = all[all.length - 1];
+            const [lMaj, lMin] = last.ver.split('.').map(Number);
+            let pMaj = lMaj, pMin = lMin;
+
+            // 下一个版本的日期 = 最后已知版本日期 + 该版本的持续天数
+            let pDate = new Date(last.date);
+            pDate.setDate(pDate.getDate() + (last.days || cfg.cycle));
+
+            // 版本号进位到下一个
+            [pMaj, pMin] = nextVer(pMaj, pMin, cfg.maxMinor);
+
+            // 预测 10 个未来版本
+            for (let i = 0; i < 10; i++) {
+              all.push({ ver: `${pMaj}.${pMin}`, date: toLocalISO(pDate), predicted: true });
+              pDate = new Date(pDate);
+              pDate.setDate(pDate.getDate() + cfg.cycle);
+              [pMaj, pMin] = nextVer(pMaj, pMin, cfg.maxMinor);
+            }
+
+            // 3. 从当前版本开始取 3 个展示
+            const res = [];
+            for (let i = 0; i < 3; i++) {
+              const idx = curIdx + i;
+              if (idx < all.length) {
+                const v = all[idx];
+                const date = new Date(v.date);
+                const liveDate = new Date(date);
+                liveDate.setDate(date.getDate() - 12);
+                res.push({ num: `V${v.ver}`, upDate: date, liveDate });
+              }
+            }
+            return res;
           });
 
           const formatDate = (d) =>
