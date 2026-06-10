@@ -1,363 +1,248 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="zh-CN">
-  <head>
-    <meta charset="UTF-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
-    />
-    <link
-      rel="icon"
-      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✨</text></svg>"
-    />
-    <title>米家版本观测台</title>
-    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
-    <style>
-      * {
-        box-sizing: border-box;
-        -webkit-tap-highlight-color: transparent;
-      }
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>版本预测 · 原神 & 崩铁</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body data-game="genshin">
 
-      /* 基础样式 */
-      body {
-        margin: 0;
-        font-family: 'Helvetica Neue', Arial, sans-serif;
-        background-color: #0c0f1a;
-        color: #ffffff;
-        overflow-x: hidden;
-      }
+<div id="app">
 
-      /* 动态背景容器 */
-      .app-container {
-        min-height: 100vh;
-        padding: 20px;
-        transition: background 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-      }
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="logo-area">
+        <div class="logo-icon">
+          <svg viewBox="0 0 32 32" fill="none">
+            <circle cx="16" cy="16" r="14" stroke="var(--theme)" stroke-width="1.5" opacity="0.4"/>
+            <circle cx="16" cy="16" r="8" stroke="var(--theme)" stroke-width="1.5"/>
+            <circle cx="16" cy="16" r="2" fill="var(--theme)"/>
+          </svg>
+        </div>
+        <h1 class="logo-text">版本预测</h1>
+      </div>
+      <nav class="game-tabs">
+        <button
+          v-for="game in games"
+          :key="game.key"
+          :class="['tab-btn', { active: selectedGame === game.key }]"
+          @click="switchGame(game.key)"
+        >
+          <span class="tab-dot" :style="{ background: game.themeColor }"></span>
+          {{ game.name }}
+        </button>
+      </nav>
+    </div>
+  </header>
 
-      /* --- 主题配置 --- */
-      /* 原神状态 */
-      .theme-gi {
-        background: radial-gradient(circle at 50% 0%, #2a2e45 0%, #0c0f1a 100%);
-        --theme-color: #d3bc8e;
-        --theme-shadow: rgba(211, 188, 142, 0.4);
-      }
-      /* 崩铁状态 */
-      .theme-hsr {
-        background: radial-gradient(circle at 50% 0%, #1a2333 0%, #0c0f1a 100%);
-        --theme-color: #61e1ff;
-        --theme-shadow: rgba(97, 225, 255, 0.4);
-      }
+  <main class="main-content">
 
-      /* --- 导航按钮 --- */
-      .nav-tabs {
-        display: flex;
-        background: rgba(0, 0, 0, 0.5);
-        padding: 5px;
-        border-radius: 50px;
-        margin: 20px 0 40px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        z-index: 10;
-      }
-
-      .tab-item {
-        padding: 12px 30px;
-        border-radius: 40px;
-        cursor: pointer;
-        font-size: 14px;
-        font-weight: bold;
-        transition: all 0.3s ease;
-        color: rgba(255, 255, 255, 0.4);
-      }
-
-      /* 选中状态：利用 CSS 变量统一控制 */
-      .tab-item.active {
-        background-color: var(--theme-color);
-        color: #0c0f1a;
-        box-shadow: 0 0 15px var(--theme-shadow);
-      }
-
-      /* --- 内容区域 --- */
-      .header {
-        text-align: center;
-        margin-bottom: 40px;
-      }
-      .header h1 {
-        font-size: clamp(1.8rem, 5vw, 2.5rem);
-        color: var(--theme-color);
-        transition: color 0.5s;
-        margin: 0;
-      }
-
-      .version-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-        gap: 25px;
-        width: 100%;
-        max-width: 1100px;
-      }
-
-      .card {
-        background: rgba(255, 255, 255, 0.05);
-        backdrop-filter: blur(15px);
-        -webkit-backdrop-filter: blur(15px);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 24px;
-        padding: 30px;
-        transition: all 0.4s;
-        position: relative;
-      }
-
-      /* 高亮当前版本的卡片 */
-      .card.active-version {
-        border-color: var(--theme-color);
-        box-shadow:
-          inset 0 0 20px rgba(255, 255, 255, 0.02),
-          0 10px 30px rgba(0, 0, 0, 0.3);
-      }
-
-      .v-num {
-        font-size: 2.8rem;
-        font-weight: 900;
-        color: var(--theme-color);
-        display: block;
-        margin-bottom: 20px;
-      }
-
-      .data-row {
-        display: flex;
-        justify-content: space-between;
-        background: rgba(0, 0, 0, 0.2);
-        padding: 15px;
-        border-radius: 15px;
-        margin-bottom: 12px;
-        font-size: 0.95rem;
-      }
-
-      .data-label {
-        opacity: 0.5;
-      }
-
-      .footer-info {
-        margin-top: 20px;
-        text-align: center;
-        padding: 12px;
-        background: rgba(255, 255, 255, 0.03);
-        border-radius: 12px;
-        color: var(--theme-color);
-        font-weight: bold;
-        font-size: 0.9rem;
-      }
-
-      .passed {
-        text-decoration: line-through;
-        opacity: 0.3;
-      }
-
-      /* 移动端适配 */
-      @media (max-width: 768px) {
-        .nav-tabs {
-          width: 100%;
-        }
-        .tab-item {
-          flex: 1;
-          text-align: center;
-          padding: 12px 5px;
-          font-size: 13px;
-        }
-        .version-grid {
-          grid-template-columns: 1fr;
-        }
-      }
-    </style>
-  </head>
-  <body>
-    <div id="app">
-      <div :class="['app-container', 'theme-' + currentGame]">
-        <nav class="nav-tabs">
-          <div
-            class="tab-item"
-            :class="{ active: currentGame === 'gi' }"
-            @click="currentGame = 'gi'"
-          >
-            原神观测
+    <section class="hero-countdown">
+      <div class="hero-bg-glow"></div>
+      <div class="hero-particles">
+        <span v-for="n in 20" :key="n" class="particle" :style="particleStyle(n)"></span>
+      </div>
+      <div class="hero-inner">
+        <div class="current-version-info">
+          <span class="version-badge">当前版本</span>
+          <span class="version-number">{{ currentGameData.currentVersion }}</span>
+          <span class="version-date">{{ formatVersionDate(currentGameData.currentVersionDate) }} 上线</span>
+        </div>
+        <div class="countdown-display">
+          <div class="countdown-label">距离下个版本</div>
+          <div class="countdown-digits" @click="toggleCountdownFormat">
+            <template v-if="isCountdownZero">
+              <div class="countdown-zero-text">{{ currentGameData.currentVersion }} 更新中...</div>
+            </template>
+            <template v-else-if="showDetailedCountdown">
+              <div class="digit-group">
+                <span class="digit">{{ countdown.days }}</span>
+                <span class="digit-unit">天</span>
+              </div>
+              <span class="digit-sep">:</span>
+              <div class="digit-group">
+                <span class="digit">{{ countdown.hours }}</span>
+                <span class="digit-unit">时</span>
+              </div>
+              <span class="digit-sep">:</span>
+              <div class="digit-group">
+                <span class="digit">{{ countdown.minutes }}</span>
+                <span class="digit-unit">分</span>
+              </div>
+              <span class="digit-sep">:</span>
+              <div class="digit-group">
+                <span class="digit">{{ countdown.seconds }}</span>
+                <span class="digit-unit">秒</span>
+              </div>
+            </template>
+            <template v-else>
+              <div class="digit-group">
+                <span class="digit digit-large">{{ totalDaysLeft }}</span>
+                <span class="digit-unit">天</span>
+              </div>
+            </template>
           </div>
-          <div
-            class="tab-item"
-            :class="{ active: currentGame === 'hsr' }"
-            @click="currentGame = 'hsr'"
-          >
-            崩铁观测
+          <div class="next-version-info">
+            <span class="next-version-label">{{ currentGameData.nextVersion }}</span>
+            <span class="next-version-date">预计 {{ formatVersionDate(currentGameData.nextVersionDate) }}（周三）</span>
           </div>
-        </nav>
-
-        <header class="header">
-          <h1>{{ config.title }}</h1>
-          <p style="opacity: 0.5; font-size: 12px; margin-top: 10px">
-            数据实时计算中: {{ nowStr }}
-          </p>
-        </header>
-
-        <div class="version-grid">
-          <div
-            v-for="(v, index) in versions"
-            :key="v.num"
-            class="card"
-            :class="{ 'active-version': index === 0 }"
-          >
-            <span class="v-num">{{ v.num }}</span>
-
-            <div class="data-row">
-              <span class="data-label">📺 前瞻直播预测</span>
-              <span :class="{ passed: v.liveDate < now }"
-                >{{ formatDate(v.liveDate) }}</span
-              >
-            </div>
-
-            <div class="data-row">
-              <span class="data-label">🚀 版本更新时间</span>
-              <span>{{ formatDate(v.upDate) }}</span>
-            </div>
-
-            <div class="footer-info">
-              <span v-if="getDiff(v.upDate) > 0"
-                >⏳ 约 {{ getDiff(v.upDate) }} 天后更新</span
-              >
-              <span v-else-if="getDiff(v.upDate) === 0">🔥 今日维护开启</span>
-              <span v-else>🌟 版本运行中</span>
-            </div>
+          <div class="maintenance-time">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--theme)" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+            </svg>
+            维护时间 {{ currentGameData.maintenanceStart }} - {{ currentGameData.maintenanceEnd }} (UTC+8)
+          </div>
+          <div class="preview-info">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--theme)" stroke-width="2">
+              <polygon points="5 3 19 12 5 21 5 3"/>
+            </svg>
+            <template v-if="isPreviewPassed">
+              <span class="preview-passed">{{ currentGameData.nextVersion }} 前瞻已结束</span>
+            </template>
+            <template v-else>
+              <span>{{ currentGameData.nextVersion }} 前瞻直播 · 预计 {{ formatVersionDate(currentGameData.previewLiveDate) }}（周五）</span>
+              <span class="preview-countdown-inline">（ {{ previewTotalDays }}天 {{ previewCountdown.hours }}时 ）</span>
+            </template>
           </div>
         </div>
       </div>
+    </section>
+
+    <section class="banner-progress-section">
+      <h2 class="section-title">
+        <span class="title-bar"></span>
+        卡池进度
+      </h2>
+      <div class="banner-cards">
+        <div class="banner-card" :class="{ active: isHalf1 }">
+          <div class="banner-card-header">
+            <span class="banner-half-tag">上半卡池</span>
+            <span class="banner-status" :class="bannerStatus(1)">{{ bannerStatusText(1) }}</span>
+          </div>
+          <div class="banner-date-range">
+            {{ formatShortDate(currentGameData.half1Start) }} — {{ formatShortDate(currentGameData.half1End) }}
+          </div>
+          <div class="progress-bar-wrap">
+            <div class="progress-bar">
+              <div class="progress-fill half1-fill" :style="{ width: half1Percent + '%' }"></div>
+            </div>
+            <span class="progress-text">{{ currentGameData.half1Elapsed }} / {{ currentGameData.halfCycleDays }}天</span>
+          </div>
+          <div class="banner-remaining" v-if="isHalf1">
+            剩余 <strong>{{ currentGameData.half1Remaining }}</strong> 天
+          </div>
+        </div>
+        <div class="banner-card" :class="{ active: isHalf2 }">
+          <div class="banner-card-header">
+            <span class="banner-half-tag">下半卡池</span>
+            <span class="banner-status" :class="bannerStatus(2)">{{ bannerStatusText(2) }}</span>
+          </div>
+          <div class="banner-date-range">
+            {{ formatShortDate(currentGameData.half2Start) }} — {{ formatShortDate(currentGameData.half2End) }}
+          </div>
+          <div class="progress-bar-wrap">
+            <div class="progress-bar">
+              <div class="progress-fill half2-fill" :style="{ width: half2Percent + '%' }"></div>
+            </div>
+            <span class="progress-text">{{ currentGameData.half2Elapsed }} / {{ currentGameData.halfCycleDays }}天</span>
+          </div>
+          <div class="banner-remaining" v-if="isHalf2">
+            剩余 <strong>{{ currentGameData.half2Remaining }}</strong> 天
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="timeline-section">
+      <h2 class="section-title">
+        <span class="title-bar"></span>
+        版本时间线
+      </h2>
+      <div class="timeline-viewport">
+        <div class="timeline-track">
+          <div
+            v-for="(ver, idx) in timelineVersions"
+            :key="ver.version"
+            :class="['timeline-node', { current: ver.isCurrent, future: !ver.isCurrent }]"
+            :style="{ animationDelay: idx * 0.1 + 's' }"
+            :title="ver.isCurrent ? ver.version + ' · 当前版本 · ' + formatVersionDate(ver.estimatedDate) : ver.version + ' · 预计 ' + formatVersionDate(ver.estimatedDate) + ' · 前瞻 ' + formatVersionDate(ver.previewLiveDate) + ' · 距今' + formatDaysFromNow(ver.daysFromNow) + ' · 置信度' + (ver.confidence === 'high' ? '高' : ver.confidence === 'medium' ? '中' : '低')"
+          >
+            <div class="node-dot" :style="ver.isCurrent ? { background: 'var(--theme)', boxShadow: '0 0 12px var(--theme)' } : {}"></div>
+            <div class="node-label">
+              <span class="node-version">{{ ver.version }}</span>
+              <span class="node-date">{{ formatShortDate(ver.estimatedDate) }}</span>
+            </div>
+            <span v-if="!ver.isCurrent" class="confidence-tag" :class="'confidence-' + ver.confidence">
+              {{ ver.confidence === 'high' ? '高' : ver.confidence === 'medium' ? '中' : '低' }}
+            </span>
+            <span v-if="ver.isCurrent" class="current-tag">当前</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="version-table-section">
+      <h2 class="section-title">
+        <span class="title-bar"></span>
+        未来版本
+      </h2>
+      <div class="table-wrap">
+        <table class="version-table">
+          <thead>
+            <tr>
+              <th>版本</th>
+              <th>预计上线</th>
+              <th>前瞻直播</th>
+              <th>维护时间</th>
+              <th>距今</th>
+              <th>置信度</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="ver in displayedVersions" :key="ver.version">
+              <td class="ver-cell">{{ ver.version }}</td>
+              <td>{{ formatVersionDate(ver.estimatedDate) }}</td>
+              <td>{{ formatVersionDate(ver.previewLiveDate) }}（周五）</td>
+              <td class="muted">{{ ver.maintenanceStart }}-{{ ver.maintenanceEnd }}</td>
+              <td class="days-cell">{{ formatDaysFromNow(ver.daysFromNow) }}</td>
+              <td>
+                <span class="confidence-badge" :class="'badge-' + ver.confidence">
+                  {{ ver.confidence === 'high' ? '高' : ver.confidence === 'medium' ? '中' : '低' }}
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <button v-if="futureVersions.length > 5 && !showAllVersions" class="expand-btn" @click="showAllVersions = true">
+        展开更多版本 ▼
+      </button>
+      <button v-if="showAllVersions" class="expand-btn" @click="showAllVersions = false">
+        收起 ▲
+      </button>
+    </section>
+
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <p class="disclaimer">
+        本页面的版本更新时间均为基于历史规律的算法预测，仅供参考。实际更新时间以米哈游 / HoYoverse 官方公告为准。
+      </p>
+      <p class="footer-note">数据基于 {{ currentGameData.currentVersion }} 版本推算 · 周期 {{ currentGameData.cycleDays }} 天</p>
     </div>
+  </footer>
 
-    <script>
-      const { createApp, ref, computed, onMounted } = Vue;
+</div>
 
-      createApp({
-        setup() {
-          const currentGame = ref('gi');
-          const now = ref(new Date());
-
-          const CONFIGS = {
-            gi: {
-              title: '提瓦特星辰排期',
-              cycle: 42,
-              maxMinor: 8,
-              // 已发布版本记录（按时间升序，新版本上线后在此追加即可）
-              // days 字段可选，表示该版本的持续天数，不填则使用 cycle
-              history: [
-                { ver: '6.4', date: '2026-02-25' },
-                { ver: '6.5', date: '2026-04-08' },
-              ],
-            },
-            hsr: {
-              title: '琥珀历版本观测',
-              cycle: 42,
-              maxMinor: 6,
-              history: [
-                { ver: '3.0', date: '2026-02-26' },
-                { ver: '3.1', date: '2026-04-01', days: 21 },
-                { ver: '3.2', date: '2026-04-22' },
-              ],
-            },
-          };
-
-          const config = computed(() => CONFIGS[currentGame.value]);
-
-          /** 辅助：版本号进位 */
-          function nextVer(major, minor, maxMinor) {
-            if (minor >= maxMinor) return [major + 1, 0];
-            return [major, minor + 1];
-          }
-
-          /** 辅助：从 Date 对象生成 YYYY-MM-DD 字符串（本地时区） */
-          function toLocalISO(d) {
-            const y = d.getFullYear();
-            const m = String(d.getMonth() + 1).padStart(2, '0');
-            const day = String(d.getDate()).padStart(2, '0');
-            return `${y}-${m}-${day}`;
-          }
-
-          const versions = computed(() => {
-            const cfg = config.value;
-            const history = cfg.history;
-            if (!history.length) return [];
-
-            // 1. 找到当前版本：history 中 date <= now 的最后一条
-            let curIdx = 0;
-            for (let i = history.length - 1; i >= 0; i--) {
-              if (new Date(history[i].date) <= now.value) {
-                curIdx = i;
-                break;
-              }
-            }
-
-            // 2. 构建完整版本列表：history 中已有的 + 预测的
-            const all = history.map((h) => ({ ...h, predicted: false }));
-
-            // 从最后一条记录开始向前预测
-            const last = all[all.length - 1];
-            const [lMaj, lMin] = last.ver.split('.').map(Number);
-            let pMaj = lMaj, pMin = lMin;
-
-            // 下一个版本的日期 = 最后已知版本日期 + 该版本的持续天数
-            let pDate = new Date(last.date);
-            pDate.setDate(pDate.getDate() + (last.days || cfg.cycle));
-
-            // 版本号进位到下一个
-            [pMaj, pMin] = nextVer(pMaj, pMin, cfg.maxMinor);
-
-            // 预测 10 个未来版本
-            for (let i = 0; i < 10; i++) {
-              all.push({ ver: `${pMaj}.${pMin}`, date: toLocalISO(pDate), predicted: true });
-              pDate = new Date(pDate);
-              pDate.setDate(pDate.getDate() + cfg.cycle);
-              [pMaj, pMin] = nextVer(pMaj, pMin, cfg.maxMinor);
-            }
-
-            // 3. 从当前版本开始取 3 个展示
-            const res = [];
-            for (let i = 0; i < 3; i++) {
-              const idx = curIdx + i;
-              if (idx < all.length) {
-                const v = all[idx];
-                const date = new Date(v.date);
-                const liveDate = new Date(date);
-                liveDate.setDate(date.getDate() - 12);
-                res.push({ num: `V${v.ver}`, upDate: date, liveDate });
-              }
-            }
-            return res;
-          });
-
-          const formatDate = (d) =>
-            d.toLocaleDateString('zh-CN', {
-              month: '2-digit',
-              day: '2-digit',
-            }) +
-            ' (' +
-            ['日', '一', '二', '三', '四', '五', '六'][d.getDay()] +
-            ')';
-          const getDiff = (d) => Math.ceil((d - now.value) / 86400000);
-
-          onMounted(() => {
-            setInterval(() => (now.value = new Date()), 60000);
-          });
-
-          return {
-            currentGame,
-            config,
-            versions,
-            now,
-            nowStr: computed(() => now.value.toLocaleString()),
-            formatDate,
-            getDiff,
-          };
-        },
-      }).mount('#app');
-    </script>
-  </body>
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="https://unpkg.com/dayjs@1/dayjs.min.js"></script>
+<script src="https://unpkg.com/dayjs@1/plugin/relativeTime.js"></script>
+<script src="https://unpkg.com/dayjs@1/locale/zh-cn.js"></script>
+<script src="script.js"></script>
+</body>
 </html>
