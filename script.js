@@ -8,6 +8,7 @@ const GAME_CONFIG = {
     themeColor: '#4CC3F0',
     baseVersion: '6.6',
     baseDate: '2026-05-20',
+    launchDate: '2020-09-28',
     cycleDays: 42,
     halfCycleDays: 21,
     previewDaysBefore: 12,
@@ -23,6 +24,7 @@ const GAME_CONFIG = {
     themeColor: '#F0D060',
     baseVersion: '4.3',
     baseDate: '2026-06-01',
+    launchDate: '2023-04-26',
     cycleDays: 42,
     halfCycleDays: 21,
     previewDaysBefore: 12,
@@ -34,23 +36,50 @@ const GAME_CONFIG = {
   },
 };
 
-function versionToNumber(ver) {
+function majorBump(ver) {
   const parts = ver.split('.');
-  return parseInt(parts[0]) * 10 + parseInt(parts[1]);
+  return (parseInt(parts[0]) + 1) + '.0';
 }
 
-function numberToVersion(num) {
-  const major = Math.floor(num / 10);
-  const minor = num % 10;
-  return major + '.' + minor;
-}
-
-function incrementVersion(ver) {
-  return numberToVersion(versionToNumber(ver) + 1);
+function minorBump(ver) {
+  const parts = ver.split('.');
+  return parts[0] + '.' + (parseInt(parts[1]) + 1);
 }
 
 function getCycleDaysForVersion(ver, config) {
   return config.specialCycles[ver] || config.cycleDays;
+}
+
+function isAnnivVersion(versionStartDate, versionEndDate, launchDate) {
+  // 判断 [versionStartDate, versionEndDate) 区间内是否包含开服纪念日（仅比较月-日）
+  const launch = dayjs(launchDate);
+  const targetMonth = launch.month();
+  const targetDay = launch.date();
+  let cursor = dayjs(versionStartDate);
+  const end = dayjs(versionEndDate);
+  while (cursor.isBefore(end)) {
+    if (cursor.month() === targetMonth && cursor.date() === targetDay) {
+      return true;
+    }
+    cursor = cursor.add(1, 'day');
+  }
+  return false;
+}
+
+function getNextVersion(currentVer, currentVerDate, config) {
+  // 站在 currentVer，决定下一版本的版本号与上线日期
+  const cycle = getCycleDaysForVersion(currentVer, config);
+  const nextDate = alignToWednesday(dayjs(currentVerDate).add(cycle, 'day'));
+  const nextNextDate = alignToWednesday(nextDate.add(cycle, 'day'));
+  const nextThirdDate = alignToWednesday(nextNextDate.add(cycle, 'day'));
+
+  // 规则：周年庆版本 = 持续期含开服纪念日的版本；大版本 = 周年庆版本的前一个版本
+  // 若下下版本是周年庆 → 下一版本是大版本 → major 进位为 X.0
+  // 否则 → minor +1
+  if (isAnnivVersion(nextNextDate, nextThirdDate, config.launchDate)) {
+    return { version: majorBump(currentVer), date: nextDate };
+  }
+  return { version: minorBump(currentVer), date: nextDate };
 }
 
 function alignToWednesday(date) {
@@ -74,7 +103,8 @@ function predictCurrentVersion(config) {
       break;
     }
     accumulated += cycle;
-    currentVer = incrementVersion(currentVer);
+    const next = getNextVersion(currentVer, verDate, config);
+    currentVer = next.version;
     verDate = baseDate.add(accumulated, 'day');
   }
 
@@ -82,9 +112,9 @@ function predictCurrentVersion(config) {
   const cycle = getCycleDaysForVersion(currentVer, config);
   const remaining = cycle - elapsed;
 
-  const nextVer = incrementVersion(currentVer);
-  const nextDateRaw = verDate.add(cycle, 'day');
-  const nextDate = alignToWednesday(nextDateRaw);
+  const next = getNextVersion(currentVer, verDate, config);
+  const nextVer = next.version;
+  const nextDate = next.date;
 
   const half1Start = verDate;
   const half1End = verDate.add(config.halfCycleDays, 'day');
@@ -144,14 +174,12 @@ function predictFutureVersions(config, currentData, count) {
   });
 
   let ver = currentData.currentVersion;
-  let dateAccum = 0;
+  let prevDate = currentVerDate;
 
   for (let i = 0; i < count; i++) {
-    const cycle = getCycleDaysForVersion(ver, config);
-    dateAccum += cycle;
-    ver = incrementVersion(ver);
-    const nextDateRaw = currentVerDate.add(dateAccum, 'day');
-    const nextDate = alignToWednesday(nextDateRaw);
+    const next = getNextVersion(ver, prevDate, config);
+    ver = next.version;
+    const nextDate = next.date;
     const daysFromNow = nextDate.diff(dayjs().startOf('day'), 'day');
 
     // 计算前瞻直播日期
@@ -176,6 +204,8 @@ function predictFutureVersions(config, currentData, count) {
       maintenanceStart: config.maintenanceStart,
       maintenanceEnd: config.maintenanceEnd,
     });
+
+    prevDate = nextDate;
   }
 
   return versions;
