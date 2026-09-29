@@ -22,8 +22,9 @@ const GAME_CONFIG = {
     name: '崩坏：星穹铁道',
     nameEn: 'Honkai: Star Rail',
     themeColor: '#F0D060',
-    baseVersion: '4.3',
-    baseDate: '2026-06-01',
+    // 基准锚点：4.6「月升之前，与兽共舞」于 2026-09-28（周一）上线，官方公告持续至 2026-11-11
+    baseVersion: '4.6',
+    baseDate: '2026-09-28',
     launchDate: '2023-04-26',
     cycleDays: 42,
     halfCycleDays: 21,
@@ -32,7 +33,9 @@ const GAME_CONFIG = {
     maintenanceStart: '06:00',
     maintenanceEnd: '11:00',
     timezone: 'Asia/Shanghai',
-    specialCycles: {},
+    // 官方公告的实际版本时长（天）：
+    // 4.3: 06-01~07-15(44)  4.4: 07-15~08-26(42)  4.5: 08-26~09-28(33，缩短)  4.6: 09-28~11-11(44)
+    specialCycles: { '4.6': 44 },
   },
 };
 
